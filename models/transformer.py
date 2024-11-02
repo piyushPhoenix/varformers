@@ -9,7 +9,7 @@ from models.longformer import LongformerSelfAttention, LongformerConfig
 from models.linformer import LinformerAttention
 
 def build_model(model_type, vocab_size, d_model, h, d_ff,
-                N, dropout, decoder_layers, device):
+                N, dropout, decoder_layers, device, k_dim = 128):
     
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
@@ -29,7 +29,7 @@ def build_model(model_type, vocab_size, d_model, h, d_ff,
         attn = LinformerAttention(dim = d_model,
                            heads=h,
                            device = device, 
-                           k_dim = 128)
+                           k_dim = k_dim)
 
         
     ff = PositionwiseFeedForward(d_model, d_ff, dropout)
