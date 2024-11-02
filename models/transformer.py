@@ -6,6 +6,7 @@ import math
 from functools import partial
 from models.performer import PerformerAttention
 from models.longformer import LongformerSelfAttention, LongformerConfig
+from models.linformer import LinformerAttention
 
 def build_model(model_type, vocab_size, d_model, h, d_ff,
                 N, dropout, decoder_layers, device):
@@ -24,6 +25,12 @@ def build_model(model_type, vocab_size, d_model, h, d_ff,
                  attention_dilation = [1]*N)
         
         attn = partial(LongformerSelfAttention, config)
+    elif model_type=="linformer":
+        attn = LinformerAttention(dim = d_model,
+                           heads=h,
+                           device = device, 
+                           k_dim = 128)
+
         
     ff = PositionwiseFeedForward(d_model, d_ff, dropout)
     position = PositionalEncoding(d_model, dropout)    
