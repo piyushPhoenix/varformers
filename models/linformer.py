@@ -4,8 +4,7 @@ from torch import nn
 from einops import rearrange
 
 class LinformerAttention(nn.Module):
-    def __init__(self, dim, heads, device,
-                 k_dim, dropout=0.1, qkv_bias=True, attn_out_bias=True):
+    def __init__(self, dim, heads, k_dim, seq_len, dropout=0.1, qkv_bias=True, attn_out_bias=True):
         super(LinformerAttention, self).__init__()
         
         assert dim % heads == 0, 'dimension must be divisible by number of heads'
@@ -16,41 +15,56 @@ class LinformerAttention(nn.Module):
         self.dim_heads = dim_heads
         self.k_dim = k_dim
         
-        # Projection matrices for Q, K, V and the low-rank projection for K and V
+        # Projection matrices for Q, K, V
         self.to_q = nn.Linear(dim, inner_dim, bias=qkv_bias)
         self.to_k = nn.Linear(dim, inner_dim, bias=qkv_bias)
         self.to_v = nn.Linear(dim, inner_dim, bias=qkv_bias)
-        self.k_proj = nn.Linear(dim_heads, k_dim , bias=False)  # Linear projection for key
-        self.v_proj = nn.Linear(dim_heads, k_dim, bias=False)  # Linear projection for value
-        self.to_out = nn.Linear(inner_dim, dim, bias=attn_out_bias)
         
+        # Low-rank projection for the sequence dimension (N -> k)
+        self.proj_k = nn.Linear(seq_len, k_dim, bias=False)  # Projection for keys across sequence length
+        self.proj_v = nn.Linear(seq_len, k_dim, bias=False)  # Projection for values across sequence length
+        
+        # Final output projection
+        self.to_out = nn.Linear(inner_dim, dim, bias=attn_out_bias)
         self.dropout = nn.Dropout(dropout)
         
     def forward(self, x, mask=None):
         b, n, _ = x.shape
         
         # Generate Q, K, V matrices
-        q = self.to_q(x)
-        k = self.to_k(x)
-        v = self.to_v(x)
+        q = self.to_q(x)  # Shape: (b, n, inner_dim)
+        k = self.to_k(x)  # Shape: (b, n, inner_dim)
+        v = self.to_v(x)  # Shape: (b, n, inner_dim)
         
         # Reshape to separate heads
         q = rearrange(q, 'b n (h d) -> b h n d', h=self.heads)
         k = rearrange(k, 'b n (h d) -> b h n d', h=self.heads)
         v = rearrange(v, 'b n (h d) -> b h n d', h=self.heads)
 
-        print(k.shape)
+        print(k.shape, q.shape, v.shape) 
+
+        # Apply sequence dimension projection to reduce N -> k 
+        k = rearrange(k, 'b h n d -> b h d n')  # Shape: (b, h, dim_heads, n)
+        v = rearrange(v, 'b h n d -> b h d n')  # Shape: (b, h, dim_heads, n)
+
+        print(k.shape, q.shape, v.shape) 
+      
+        k = self.proj_k(k)  # Shape: (b, h, dim_heads, k_dim)
+        v = self.proj_v(v)  # Shape: (b, h, dim_heads, k_dim)
         
-        # Apply low-rank projections on K and V
-        k = self.k_proj(k)  # Shape: (b, h, n, k_dim)
-        v = self.v_proj(v)  # Shape: (b, h, n, k_dim)
+        # Rearrange back for attention calculation
+        k = rearrange(k, 'b h d k -> b h k d')  # Shape: (b, h, k_dim, dim_heads)
+        v = rearrange(v, 'b h d k -> b h k d')  # Shape: (b, h, k_dim, dim_heads)
         
         # Perform scaled dot-product attention with low-rank K and V
         scale = math.sqrt(self.dim_heads)
         attn_scores = torch.einsum('bhqd,bhkd->bhqk', q, k) / scale
+
+        print(attn_scores.shape)
         
+        # Apply mask if available
         if mask is not None:
-            attn_scores = attn_scores.masked_fill(mask == 0, float('-inf'))
+            attn_scores = attn_scores.masked_fill(mask[:, None, None, :] == 0, float('-inf'))
         
         attn_probs = torch.softmax(attn_scores, dim=-1)
         attn_probs = self.dropout(attn_probs)
