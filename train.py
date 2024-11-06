@@ -15,7 +15,7 @@ from utils.evaluation import predictions, accuracy, report, conf_matrix
 def main():   
     
     # load config file
-    config_file_path = "/home/shashank/repos/varformers/config.yml"
+    config_file_path = "./config.yml"
     config = read_yaml(config_file_path) 
     device = config['device']
     filepath = config['filepath']
@@ -73,27 +73,33 @@ def main():
     dropout = model_hp['dropout']
     n_cls = model_hp['n_cls']
     d_ff = model_hp['d_ff']
+    seq_len = model_hp['seq_len']
+    k_dim = model_hp['k_dim']
     decoder_layers = [dim, dim, n_cls]
-    
-    tokenizer = get_build_tokenizer(f'{filepath}/best_model/vocab.json', train_data, "text")   
-    
+
+    tokenizer = get_build_tokenizer(f'{filepath}/best_model/vocab.json', train_data, "text")
+
+    tokenizer.enable_padding(length=4095)
+    tokenizer.enable_truncation(max_length=4095)
+
+
     train_ds = SentimentDataset(train_data, tokenizer)
     val_ds = SentimentDataset(val_data, tokenizer)
     test_ds = SentimentDataset(test_data, tokenizer)
-    
+
     train_dl = DataLoader(train_ds, batch_size=batch_size, 
                             shuffle=True, collate_fn=collate_fn)
     val_dl = DataLoader(val_ds, batch_size=batch_size, 
                         shuffle=True, collate_fn=collate_fn) 
     test_dl = DataLoader(test_ds, batch_size=batch_size, 
                         shuffle=True, collate_fn=collate_fn) 
-    
+
     dump_yaml(config['model'], f'{filepath}/best_model/model_config.yml')   
     ntokens = tokenizer.get_vocab_size()
-        
+
     model = build_model(model_type, ntokens, dim, nheads, d_ff,
-                            nlayers, dropout, decoder_layers, device) 
-    
+                            nlayers, dropout, decoder_layers, device, k_dim, seq_len)
+
     # Training
     if optimizer == 'adam':
         opt = torch.optim.Adam

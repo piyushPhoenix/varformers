@@ -42,17 +42,8 @@ class SentimentDataset(Dataset):
 
 
 def collate_fn(batch):
-    
-    # restricting the mas seq_len in a batch to 500
-    max_len = min(max([batch[i]["encoder_input"].size(dim=0) for i in range(len(batch))]), 500)
-
-    
-    for i in range(len(batch)):
-        batch[i]["encoder_input"] = batch[i]["encoder_input"][:max_len]
-        batch[i]["encoder_input"] = torch.cat([batch[i]["encoder_input"], torch.ones(max_len - batch[i]["encoder_input"].size(dim=0), dtype=torch.int64)])
-        
     encoder_input = torch.tensor([batch[i]["encoder_input"].tolist() for i in range(len(batch))])
     label = torch.tensor([[batch[i]["label"].item()] for i in range(len(batch))])
-    mask = torch.tensor([[1 if ele == 1 else 0 for ele in li] for li in encoder_input])
+    mask = torch.tensor([[0 if ele == 0 else 1 for ele in li] for li in encoder_input])
     mask = (mask > 0).unsqueeze(-1)
     return encoder_input, label.float(), mask

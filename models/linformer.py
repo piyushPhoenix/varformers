@@ -47,7 +47,6 @@ class LinformerAttention(nn.Module):
         k = rearrange(k, 'b h n d -> b h d n')  # Shape: (b, h, dim_heads, n)
         v = rearrange(v, 'b h n d -> b h d n')  # Shape: (b, h, dim_heads, n)
 
-        print(k.shape, q.shape, v.shape) 
       
         k = self.proj_k(k)  # Shape: (b, h, dim_heads, k_dim)
         v = self.proj_v(v)  # Shape: (b, h, dim_heads, k_dim)
@@ -64,8 +63,8 @@ class LinformerAttention(nn.Module):
         
         # Apply mask if available
         if mask is not None:
-            attn_scores = attn_scores.masked_fill(mask[:, None, None, :] == 0, float('-inf'))
-        
+            attn_scores = attn_scores.masked_fill(mask == 0, -1e9)
+
         attn_probs = torch.softmax(attn_scores, dim=-1)
         attn_probs = self.dropout(attn_probs)
         
